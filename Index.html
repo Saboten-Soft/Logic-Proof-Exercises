@@ -5,18 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>自然演繹パズル (全50問 ML完全版)</title>
 <style>
-    /* touch-action: none; を manipulation に変更し、クリックを正常化 */
     body { font-family: sans-serif; background: #f4f7f6; margin: 0; display: flex; flex-direction: column; height: 100dvh; touch-action: manipulation; }
     
     header { background: #2c3e50; color: white; padding: 12px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 10; }
     .header-top { display: flex; justify-content: space-between; align-items: center; padding: 0 10px; }
     .level-badge { padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 13px; margin-right: 8px; color: white; }
     
-    /* ボタンのタップ領域と反応を改善 */
-    .skip-btn { background: #34495e; color: white; border: 1px solid #7f8c8d; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; transition: 0.1s; touch-action: manipulation; }
-    .skip-btn:active { background: #95a5a6; transform: scale(0.95); }
+    .skip-btn { background: #34495e; color: white; border: 1px solid #7f8c8d; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; touch-action: manipulation; }
+    .skip-btn:active { background: #95a5a6; }
     
-    #canvas { flex: 1; display: flex; justify-content: center; align-items: flex-end; padding-bottom: 80px; overflow: auto; transition: opacity 0.3s ease; }
+    #canvas { flex: 1; display: flex; justify-content: center; align-items: flex-end; padding-bottom: 80px; overflow: auto; }
     
     .tree { display: inline-flex; flex-direction: column; align-items: center; margin: 0 5px; }
     .premises { display: flex; flex-direction: row; align-items: flex-end; gap: 15px; margin-bottom: 2px; }
@@ -25,9 +23,8 @@
     .inference-line { width: 100%; border-top: 2px solid #333; text-align: right; position: relative; }
     .rule-label { position: absolute; right: -30px; top: -10px; font-size: 13px; font-weight: bold; color: #2980b9; }
     
-    .node { padding: 12px 18px; border-radius: 6px; font-weight: bold; text-align: center; user-select: none; font-size: 15px; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap; }
+    .node { padding: 12px 18px; border-radius: 6px; font-weight: bold; text-align: center; user-select: none; font-size: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap; }
     .node.filled { background: #ecf0f1; border: 2px solid #bdc3c7; cursor: pointer; color: #2c3e50; }
-    .node.filled:hover { background: #d5dbdb; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
     .node.assumption { background: #f39c12; color: white; border-color: #e67e22; }
     .node.placeholder { background: white; border: 2px dashed #3498db; color: #3498db; cursor: pointer; min-width: 40px; animation: pulse 2s infinite; }
     
@@ -38,8 +35,7 @@
 
     .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 25px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); z-index: 200; width: 90%; max-width: 360px; max-height: 80vh; overflow-y: auto; }
     .modal h3 { margin-top: 0; font-size: 16px; text-align: center; border-bottom: 2px solid #f0f3f4; padding-bottom: 10px; margin-bottom: 15px; color: #2c3e50; }
-    .btn { width: 100%; margin: 4px 0; padding: 12px; cursor: pointer; border: none; background: #2ecc71; color: white; border-radius: 8px; font-weight: bold; font-size: 14px; transition: 0.2s; }
-    .btn:active { transform: scale(0.98); }
+    .btn { width: 100%; margin: 4px 0; padding: 12px; cursor: pointer; border: none; background: #2ecc71; color: white; border-radius: 8px; font-weight: bold; font-size: 14px; }
     .btn.cancel { background: #95a5a6; margin-top: 15px; }
     .btn.danger { background: #e74c3c; margin-top: 10px; }
     
@@ -47,8 +43,7 @@
     .rule-header { grid-column: span 2; font-size: 12px; color: #7f8c8d; text-align: center; margin-top: 10px; font-weight: bold; }
     
     #palette-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .palette-card { padding: 12px 5px; background: #3498db; color: white; border-radius: 8px; cursor: pointer; font-weight: bold; text-align: center; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: 0.1s; }
-    .palette-card:active { transform: scale(0.95); }
+    .palette-card { padding: 12px 5px; background: #3498db; color: white; border-radius: 8px; cursor: pointer; font-weight: bold; text-align: center; font-size: 14px; display: flex; align-items: center; justify-content: center; }
     .palette-card.assumption { background: #f39c12; }
     
     #overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index: 150; backdrop-filter: blur(2px); }
@@ -65,8 +60,8 @@
             <b id="problem-text" style="font-size: 15px;">A, B ⊢ A ∧ B</b>
         </div>
         <div style="flex:1; text-align:right;">
-            <!-- JS側で安全にイベントを付与するためにIDを追加 -->
-            <button class="skip-btn" type="button" id="skip-btn">⏭ スキップ</button>
+            <!-- シンプルなonclickに戻しました -->
+            <button class="skip-btn" onclick="loadRandomProblem()">⏭ スキップ</button>
         </div>
     </div>
     <div style="font-size:11px; margin-top:10px; opacity:0.8;">式をタップして規則を選び、下から上へ証明を構築</div>
@@ -261,44 +256,37 @@
     const levelColors = ['#2ecc71', '#3498db', '#9b59b6', '#e67e22', '#e74c3c', '#c0392b', '#8e44ad'];
 
     window.onload = () => { 
-        // JS側で安全にクリックイベントを紐付け
-        document.getElementById('skip-btn').addEventListener('click', loadRandomProblem);
         loadRandomProblem(); 
     };
 
     function loadRandomProblem() {
+        let nextIndex = currentProblemIndex;
+        while (nextIndex === currentProblemIndex) {
+            nextIndex = Math.floor(Math.random() * problemDatabase.length);
+        }
+        currentProblemIndex = nextIndex;
+        const problem = problemDatabase[currentProblemIndex];
+
+        const pText = problem.p.length > 0 ? problem.p.join(', ') + ' ⊢ ' : '⊢ ';
+        document.getElementById('problem-text').innerText = pText + problem.c;
+        const badge = document.getElementById('level-badge');
+        badge.innerText = 'Lv.' + problem.lv;
+        badge.style.background = levelColors[problem.lv - 1] || '#34495e';
+
         const canvas = document.getElementById('canvas');
-        canvas.style.opacity = 0; // フェードアウト演出
+        canvas.innerHTML = `
+            <div class="tree-container" id="root-container">
+                <div class="node filled" onclick="openRuleModal(this)">${problem.c}</div>
+            </div>`;
 
-        setTimeout(() => {
-            let nextIndex = currentProblemIndex;
-            while (nextIndex === currentProblemIndex) {
-                nextIndex = Math.floor(Math.random() * problemDatabase.length);
-            }
-            currentProblemIndex = nextIndex;
-            const problem = problemDatabase[currentProblemIndex];
+        const paletteGrid = document.getElementById('palette-grid');
+        paletteGrid.innerHTML = '';
+        problem.d.forEach(formula => {
+            const isAssumption = formula.includes('[');
+            paletteGrid.innerHTML += `<div class="palette-card ${isAssumption ? 'assumption' : ''}" onclick="fillPlaceholder('${formula}')">${formula}</div>`;
+        });
 
-            const pText = problem.p.length > 0 ? problem.p.join(', ') + ' ⊢ ' : '⊢ ';
-            document.getElementById('problem-text').innerText = pText + problem.c;
-            const badge = document.getElementById('level-badge');
-            badge.innerText = 'Lv.' + problem.lv;
-            badge.style.background = levelColors[problem.lv - 1] || '#34495e';
-
-            canvas.innerHTML = `
-                <div class="tree-container" id="root-container">
-                    <div class="node filled" onclick="openRuleModal(this)">${problem.c}</div>
-                </div>`;
-
-            const paletteGrid = document.getElementById('palette-grid');
-            paletteGrid.innerHTML = '';
-            problem.d.forEach(formula => {
-                const isAssumption = formula.includes('[');
-                paletteGrid.innerHTML += `<div class="palette-card ${isAssumption ? 'assumption' : ''}" onclick="fillPlaceholder('${formula}')">${formula}</div>`;
-            });
-
-            closeAllModals();
-            canvas.style.opacity = 1; // フェードイン演出
-        }, 150); // アニメーションの待機時間
+        closeAllModals();
     }
 
     function closeAllModals() {
@@ -357,4 +345,25 @@
 
         let premisesHTML = '';
         for(let i=0; i<premiseCount; i++) {
-            premisesHTML += `<div c
+            premisesHTML += `<div class="node placeholder" onclick="openPaletteModal(this)">[ ? ]</div>`;
+        }
+
+        newTree.innerHTML = `
+            <div class="premises">${premisesHTML}</div>
+            <div class="inference-line"><span class="rule-label">${ruleLabel}</span></div>
+            <div class="conclusion"><div class="node filled ${isAssumption ? 'assumption' : ''}" onclick="openRuleModal(this)">${formula}</div></div>
+        `;
+
+        activeNode.replaceWith(newTree);
+        closeAllModals();
+        validateAllTrees();
+    }
+
+    function undoTree() {
+        if (!activeNode) return;
+        const tree = activeNode.closest('.tree');
+        if (!tree) return;
+        
+        const formula = activeNode.innerText;
+        const isAssumption = activeNode.classList.contains('assumption');
+        c
