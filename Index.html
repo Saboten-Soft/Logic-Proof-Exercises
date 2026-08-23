@@ -3,45 +3,44 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>自然演繹パズル (ボトムアップ方式)</title>
+<title>自然演繹パズル (MLフルバージョン)</title>
 <style>
     body { font-family: sans-serif; background: #f4f7f6; margin: 0; display: flex; flex-direction: column; height: 100dvh; touch-action: none; }
     header { background: #2c3e50; color: white; padding: 12px; text-align: center; font-size: 14px; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
     
-    /* キャンバスを下揃えにして、木が上へ育つようにする */
     #canvas { flex: 1; display: flex; justify-content: center; align-items: flex-end; padding-bottom: 60px; overflow: auto; }
     
-    /* 木構造のCSSレイアウト */
     .tree { display: inline-flex; flex-direction: column; align-items: center; margin: 0 5px; }
     .premises { display: flex; flex-direction: row; align-items: flex-end; gap: 15px; margin-bottom: 2px; }
     .conclusion { margin-top: 2px; }
     
-    /* 推論線 */
     .inference-line { width: 100%; border-top: 2px solid #333; text-align: right; position: relative; }
-    .rule-label { position: absolute; right: -25px; top: -10px; font-size: 13px; font-weight: bold; color: #2980b9; }
+    .rule-label { position: absolute; right: -30px; top: -10px; font-size: 13px; font-weight: bold; color: #2980b9; }
     
-    /* 論理式ノード */
-    .node { padding: 12px 20px; border-radius: 6px; font-weight: bold; text-align: center; user-select: none; font-size: 16px; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .node { padding: 12px 20px; border-radius: 6px; font-weight: bold; text-align: center; user-select: none; font-size: 16px; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap; }
     .node.filled { background: #ecf0f1; border: 2px solid #bdc3c7; cursor: pointer; color: #2c3e50; }
     .node.filled:hover { background: #d5dbdb; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+    .node.assumption { background: #f39c12; color: white; border-color: #e67e22; }
     .node.placeholder { background: white; border: 2px dashed #3498db; color: #3498db; cursor: pointer; min-width: 40px; animation: pulse 2s infinite; }
     
     @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(52, 152, 219, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0); } }
 
-    /* エラー表示（赤い点線） */
     .tree.error > .inference-line { border-top: 2px dashed #e74c3c; }
     .tree.error > .conclusion > .node { border-color: #e74c3c; background-color: #fadbd8; color: #c0392b; }
 
-    /* モーダルUI */
-    .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 25px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); z-index: 200; width: 85%; max-width: 320px; }
-    .modal h3 { margin-top: 0; font-size: 18px; text-align: center; border-bottom: 2px solid #f0f3f4; padding-bottom: 15px; margin-bottom: 15px; color: #2c3e50; }
-    .btn { width: 100%; margin: 6px 0; padding: 14px; cursor: pointer; border: none; background: #2ecc71; color: white; border-radius: 8px; font-weight: bold; font-size: 16px; transition: 0.2s; }
+    .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 25px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); z-index: 200; width: 90%; max-width: 360px; }
+    .modal h3 { margin-top: 0; font-size: 16px; text-align: center; border-bottom: 2px solid #f0f3f4; padding-bottom: 10px; margin-bottom: 15px; color: #2c3e50; }
+    .btn { width: 100%; margin: 4px 0; padding: 12px; cursor: pointer; border: none; background: #2ecc71; color: white; border-radius: 8px; font-weight: bold; font-size: 14px; transition: 0.2s; }
     .btn:active { transform: scale(0.98); }
     .btn.cancel { background: #95a5a6; margin-top: 15px; }
-    .btn.danger { background: #e74c3c; }
+    .btn.danger { background: #e74c3c; margin-top: 10px; }
+    
+    .rule-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .rule-header { grid-column: span 2; font-size: 12px; color: #7f8c8d; text-align: center; margin-top: 10px; font-weight: bold; }
     
     #palette-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .palette-card { padding: 15px 10px; background: #3498db; color: white; border-radius: 8px; cursor: pointer; font-weight: bold; text-align: center; font-size: 16px; }
+    .palette-card { padding: 15px 5px; background: #3498db; color: white; border-radius: 8px; cursor: pointer; font-weight: bold; text-align: center; font-size: 15px; }
+    .palette-card.assumption { background: #f39c12; }
     
     #overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index: 150; backdrop-filter: blur(2px); }
 </style>
@@ -49,60 +48,80 @@
 <body>
 
 <header>
-    お題: <b>A → B, A ⊢ A ∧ B</b><br>
-    <small>式や枠をタップして、下から上へ証明を組み立ててください</small>
+    お題: <b>A ∨ B, A → C, B → C ⊢ C</b><br>
+    <small>式をタップして規則を選び、下から上へ証明を構築</small>
 </header>
 
 <div id="canvas">
-    <!-- 初期状態の結論 -->
     <div class="tree-container" id="root-container">
-        <div class="node filled" onclick="openRuleModal(this)">A ∧ B</div>
+        <div class="node filled" onclick="openRuleModal(this)">C</div>
     </div>
 </div>
 
 <div id="overlay" onclick="closeAllModals()"></div>
 
-<!-- 推論規則選択モーダル (埋まっているノード用) -->
+<!-- 推論規則選択モーダル -->
 <div id="rule-modal" class="modal">
-    <h3>操作を選択</h3>
+    <h3>推論規則を適用（上へ伸ばす）</h3>
     
-    <div id="grow-actions">
-        <button class="btn" onclick="applyRule('∧I')">∧I (連言導入)</button>
-        <button class="btn" onclick="applyRule('→E')">→E (含意除去)</button>
-        <button class="btn danger" onclick="clearToPlaceholder()" style="margin-top: 15px;">🗑 この枠を空に戻す</button>
+    <div id="grow-actions" class="rule-grid">
+        <div class="rule-header">導入則 (Intro)</div>
+        <button class="btn" onclick="applyRule('∧I', 2)">∧I</button>
+        <button class="btn" onclick="applyRule('∨I', 1)">∨I</button>
+        <button class="btn" onclick="applyRule('→I', 1)">→I</button>
+        <button class="btn" onclick="applyRule('¬I', 1)">¬I</button>
+        
+        <div class="rule-header">除去則 (Elim)</div>
+        <button class="btn" style="background:#27ae60;" onclick="applyRule('∧E', 1)">∧E</button>
+        <button class="btn" style="background:#27ae60;" onclick="applyRule('∨E', 3)">∨E (3枠)</button>
+        <button class="btn" style="background:#27ae60;" onclick="applyRule('→E', 2)">→E</button>
+        <button class="btn" style="background:#27ae60;" onclick="applyRule('¬E', 2)">¬E</button>
+        
+        <div style="grid-column: span 2;">
+            <button class="btn danger" onclick="clearToPlaceholder()">🗑 この枠を空に戻す</button>
+        </div>
     </div>
     
     <div id="undo-actions" style="display: none;">
-        <p style="font-size:13px; color:#7f8c8d; text-align:center;">この式にはすでに推論が適用されています。</p>
+        <p style="font-size:13px; color:#7f8c8d; text-align:center;">すでに推論が適用されています。</p>
         <button class="btn danger" onclick="undoTree()">🗑 上の推論を削除する</button>
     </div>
     
     <button class="btn cancel" onclick="closeAllModals()">キャンセル</button>
 </div>
 
-<!-- パレットモーダル (空枠用) -->
+<!-- パレットモーダル -->
 <div id="palette-modal" class="modal">
     <h3>式を当てはめる</h3>
     <div id="palette-grid">
         <div class="palette-card" onclick="fillPlaceholder('A')">A</div>
         <div class="palette-card" onclick="fillPlaceholder('B')">B</div>
-        <div class="palette-card" onclick="fillPlaceholder('A → B')">A → B</div>
-        <div class="palette-card" onclick="fillPlaceholder('A ∧ B')">A ∧ B</div>
+        <div class="palette-card" onclick="fillPlaceholder('C')">C</div>
+        <div class="palette-card" onclick="fillPlaceholder('A ∨ B')">A ∨ B</div>
+        <div class="palette-card" onclick="fillPlaceholder('A → C')">A → C</div>
+        <div class="palette-card" onclick="fillPlaceholder('B → C')">B → C</div>
+        <div class="palette-card assumption" onclick="fillPlaceholder('[A]¹')">[A]¹ (仮定)</div>
+        <div class="palette-card assumption" onclick="fillPlaceholder('[B]²')">[B]² (仮定)</div>
     </div>
     <button class="btn cancel" onclick="closeAllModals()">キャンセル</button>
 </div>
 
 <script>
-    // --- 1. AST（抽象構文木）と論理判定エンジン ---
+    // --- 1. AST（抽象構文木）とMLフル論理判定エンジン ---
     function parseAST(str) {
         if (!str || str === '[ ? ]') return null;
-        if (str.includes('∧')) {
-            let [l, r] = str.split('∧').map(s => s.trim());
-            return { op: '∧', left: parseAST(l), right: parseAST(r) };
-        }
+        // 仮定の装飾 [A]¹ などを自動でクレンジングして A として扱う
+        str = str.replace(/\[|\]|¹|²|³/g, '').trim(); 
+        
+        if (str.startsWith('¬')) return { op: '¬', child: parseAST(str.substring(1)) };
         if (str.includes('→')) {
-            let [l, r] = str.split('→').map(s => s.trim());
-            return { op: '→', left: parseAST(l), right: parseAST(r) };
+            let p = str.split('→'); return { op: '→', left: parseAST(p[0]), right: parseAST(p.slice(1).join('→')) };
+        }
+        if (str.includes('∨')) {
+            let p = str.split('∨'); return { op: '∨', left: parseAST(p[0]), right: parseAST(p.slice(1).join('∨')) };
+        }
+        if (str.includes('∧')) {
+            let p = str.split('∧'); return { op: '∧', left: parseAST(p[0]), right: parseAST(p.slice(1).join('∧')) };
         }
         return { op: 'atom', val: str.trim() };
     }
@@ -114,20 +133,46 @@
     function validateRule(ruleLabel, sources, target) {
         let tgtAst = parseAST(target);
         let srcAsts = sources.map(parseAST);
-        if(srcAsts.includes(null) || !tgtAst) return true; // 空枠がある場合はエラーを出さない
+        if(srcAsts.includes(null) || !tgtAst) return true; // 空枠があればエラーを出さない
 
-        if (ruleLabel === '→E') {
-            let impl = srcAsts.find(s => s && s.op === '→');
-            let atom = srcAsts.find(s => s !== impl);
-            if (!impl || !atom) return false;
-            return checkEqual(impl.left, atom) && checkEqual(impl.right, tgtAst);
+        switch (ruleLabel) {
+            case '∧I':
+                if (tgtAst.op !== '∧' || srcAsts.length !== 2) return false;
+                return (checkEqual(srcAsts[0], tgtAst.left) && checkEqual(srcAsts[1], tgtAst.right)) || 
+                       (checkEqual(srcAsts[1], tgtAst.left) && checkEqual(srcAsts[0], tgtAst.right));
+            case '∧E':
+                if (srcAsts.length !== 1 || srcAsts[0].op !== '∧') return false;
+                return checkEqual(srcAsts[0].left, tgtAst) || checkEqual(srcAsts[0].right, tgtAst);
+            case '∨I':
+                if (tgtAst.op !== '∨' || srcAsts.length !== 1) return false;
+                return checkEqual(srcAsts[0], tgtAst.left) || checkEqual(srcAsts[0], tgtAst.right);
+            case '∨E':
+                if (srcAsts.length !== 3) return false;
+                let orAst = srcAsts.find(s => s.op === '∨');
+                let others = srcAsts.filter(s => s !== orAst);
+                if (!orAst || others.length !== 2) return false;
+                return checkEqual(others[0], tgtAst) && checkEqual(others[1], tgtAst);
+            case '→I':
+                if (tgtAst.op !== '→' || srcAsts.length !== 1) return false;
+                return checkEqual(srcAsts[0], tgtAst.right);
+            case '→E':
+                if (srcAsts.length !== 2) return false;
+                let impl = srcAsts.find(s => s.op === '→');
+                let atom = srcAsts.find(s => s !== impl);
+                if (!impl || !atom) return false;
+                return checkEqual(impl.left, atom) && checkEqual(impl.right, tgtAst);
+            case '¬I':
+                if (tgtAst.op !== '¬' || srcAsts.length !== 1) return false;
+                return srcAsts[0].op === 'atom' && srcAsts[0].val === '⊥';
+            case '¬E':
+                if (tgtAst.op !== 'atom' || tgtAst.val !== '⊥' || srcAsts.length !== 2) return false;
+                let neg = srcAsts.find(s => s.op === '¬');
+                let pos = srcAsts.find(s => s !== neg);
+                if (!neg || !pos) return false;
+                return checkEqual(neg.child, pos);
+            default:
+                return false;
         }
-        if (ruleLabel === '∧I') {
-            if (tgtAst.op !== '∧' || srcAsts.length !== 2) return false;
-            return (checkEqual(srcAsts[0], tgtAst.left) && checkEqual(srcAsts[1], tgtAst.right)) ||
-                   (checkEqual(srcAsts[1], tgtAst.left) && checkEqual(srcAsts[0], tgtAst.right));
-        }
-        return false;
     }
 
     // --- 2. UI状態管理 ---
@@ -140,45 +185,37 @@
         activeNode = null;
     }
 
-    // 空枠 [ ? ] をタップした時
     function openPaletteModal(el) {
         activeNode = el;
         document.getElementById('palette-modal').style.display = 'block';
         document.getElementById('overlay').style.display = 'block';
     }
 
-    // 埋まっている式をタップした時
     function openRuleModal(el) {
         activeNode = el;
-        
-        // そのノードが「すでに推論の結論として使われている（上に木がある）」かを判定
         const isConclusion = el.parentElement.classList.contains('conclusion');
-        
         if (isConclusion) {
             document.getElementById('grow-actions').style.display = 'none';
             document.getElementById('undo-actions').style.display = 'block';
         } else {
-            document.getElementById('grow-actions').style.display = 'block';
+            document.getElementById('grow-actions').style.display = 'grid';
             document.getElementById('undo-actions').style.display = 'none';
         }
-        
         document.getElementById('rule-modal').style.display = 'block';
         document.getElementById('overlay').style.display = 'block';
     }
 
-    // --- 3. 木構造の操作（ボトムアップ） ---
-
-    // パレットから式を選んで枠を埋める
+    // --- 3. 木構造の操作（引数を一般化） ---
     function fillPlaceholder(formula) {
         if (!activeNode) return;
         activeNode.className = 'node filled';
+        if(formula.includes('[')) activeNode.classList.add('assumption'); // 仮定カードの装飾
         activeNode.innerText = formula;
         activeNode.onclick = function(e) { e.stopPropagation(); openRuleModal(this); };
         closeAllModals();
         validateAllTrees();
     }
 
-    // 式を空枠に戻す
     function clearToPlaceholder() {
         if (!activeNode) return;
         activeNode.className = 'node placeholder';
@@ -188,26 +225,23 @@
         validateAllTrees();
     }
 
-    // 結論から上へ木を伸ばす
-    function applyRule(ruleLabel) {
+    // premiseCount に応じてプレースホルダーを動的生成
+    function applyRule(ruleLabel, premiseCount) {
         if (!activeNode) return;
         const formula = activeNode.innerText;
+        const isAssumption = activeNode.classList.contains('assumption');
         const newTree = document.createElement('div');
         newTree.className = 'tree';
 
-        // 規則に応じたプレースホルダーの生成
         let premisesHTML = '';
-        if (ruleLabel === '∧I' || ruleLabel === '→E') {
-            premisesHTML = `
-                <div class="node placeholder" onclick="openPaletteModal(this)">[ ? ]</div>
-                <div class="node placeholder" onclick="openPaletteModal(this)">[ ? ]</div>
-            `;
+        for(let i=0; i<premiseCount; i++) {
+            premisesHTML += `<div class="node placeholder" onclick="openPaletteModal(this)">[ ? ]</div>`;
         }
 
         newTree.innerHTML = `
             <div class="premises">${premisesHTML}</div>
             <div class="inference-line"><span class="rule-label">${ruleLabel}</span></div>
-            <div class="conclusion"><div class="node filled" onclick="openRuleModal(this)">${formula}</div></div>
+            <div class="conclusion"><div class="node filled ${isAssumption ? 'assumption' : ''}" onclick="openRuleModal(this)">${formula}</div></div>
         `;
 
         activeNode.replaceWith(newTree);
@@ -215,15 +249,15 @@
         validateAllTrees();
     }
 
-    // 上に伸ばした推論を削除し、単体の式に戻す
     function undoTree() {
         if (!activeNode) return;
         const tree = activeNode.closest('.tree');
         if (!tree) return;
         
         const formula = activeNode.innerText;
+        const isAssumption = activeNode.classList.contains('assumption');
         const newNode = document.createElement('div');
-        newNode.className = 'node filled';
+        newNode.className = `node filled ${isAssumption ? 'assumption' : ''}`;
         newNode.innerText = formula;
         newNode.onclick = function(e) { e.stopPropagation(); openRuleModal(this); };
         
@@ -235,7 +269,6 @@
     // --- 4. バリデーション実行 ---
     function validateAllTrees() {
         document.querySelectorAll('.tree').forEach(tree => {
-            // scope疑似クラスを使って直下の子要素のみを取得し、入れ子バグを完全に防ぐ
             const inferenceLine = tree.querySelector(':scope > .inference-line');
             if (!inferenceLine) return;
             
