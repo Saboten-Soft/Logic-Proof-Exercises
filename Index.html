@@ -5,15 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>自然演繹パズル (全50問 ML完全版)</title>
 <style>
-    body { font-family: sans-serif; background: #f4f7f6; margin: 0; display: flex; flex-direction: column; height: 100dvh; touch-action: none; }
+    /* touch-action: none; を manipulation に変更し、クリックを正常化 */
+    body { font-family: sans-serif; background: #f4f7f6; margin: 0; display: flex; flex-direction: column; height: 100dvh; touch-action: manipulation; }
     
     header { background: #2c3e50; color: white; padding: 12px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 10; }
     .header-top { display: flex; justify-content: space-between; align-items: center; padding: 0 10px; }
     .level-badge { padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 13px; margin-right: 8px; color: white; }
-    .skip-btn { background: #34495e; color: white; border: 1px solid #7f8c8d; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; transition: 0.2s; }
-    .skip-btn:active { background: #7f8c8d; }
     
-    #canvas { flex: 1; display: flex; justify-content: center; align-items: flex-end; padding-bottom: 80px; overflow: auto; }
+    /* ボタンのタップ領域と反応を改善 */
+    .skip-btn { background: #34495e; color: white; border: 1px solid #7f8c8d; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold; transition: 0.1s; touch-action: manipulation; }
+    .skip-btn:active { background: #95a5a6; transform: scale(0.95); }
+    
+    #canvas { flex: 1; display: flex; justify-content: center; align-items: flex-end; padding-bottom: 80px; overflow: auto; transition: opacity 0.3s ease; }
     
     .tree { display: inline-flex; flex-direction: column; align-items: center; margin: 0 5px; }
     .premises { display: flex; flex-direction: row; align-items: flex-end; gap: 15px; margin-bottom: 2px; }
@@ -44,7 +47,8 @@
     .rule-header { grid-column: span 2; font-size: 12px; color: #7f8c8d; text-align: center; margin-top: 10px; font-weight: bold; }
     
     #palette-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .palette-card { padding: 12px 5px; background: #3498db; color: white; border-radius: 8px; cursor: pointer; font-weight: bold; text-align: center; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+    .palette-card { padding: 12px 5px; background: #3498db; color: white; border-radius: 8px; cursor: pointer; font-weight: bold; text-align: center; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: 0.1s; }
+    .palette-card:active { transform: scale(0.95); }
     .palette-card.assumption { background: #f39c12; }
     
     #overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index: 150; backdrop-filter: blur(2px); }
@@ -61,7 +65,8 @@
             <b id="problem-text" style="font-size: 15px;">A, B ⊢ A ∧ B</b>
         </div>
         <div style="flex:1; text-align:right;">
-            <button class="skip-btn" onclick="loadRandomProblem()">⏭ スキップ</button>
+            <!-- JS側で安全にイベントを付与するためにIDを追加 -->
+            <button class="skip-btn" type="button" id="skip-btn">⏭ スキップ</button>
         </div>
     </div>
     <div style="font-size:11px; margin-top:10px; opacity:0.8;">式をタップして規則を選び、下から上へ証明を構築</div>
@@ -113,16 +118,13 @@
 </div>
 
 <script>
-    // --- 全50問データベース (MLで証明可能) ---
+    // --- 全50問データベース ---
     const problemDatabase = [
-        // レベル1: 連言 (1-5)
         { lv:1, p:["A","B"], c:"A ∧ B", d:["A","B","A ∧ B"] },
         { lv:1, p:["A ∧ B"], c:"A", d:["A","A ∧ B"] },
         { lv:1, p:["A ∧ B"], c:"B", d:["B","A ∧ B"] },
         { lv:1, p:["A ∧ B"], c:"B ∧ A", d:["A","B","A ∧ B","B ∧ A"] },
         { lv:1, p:["A ∧ B","C"], c:"A ∧ (B ∧ C)", d:["A","B","C","A ∧ B","B ∧ C","A ∧ (B ∧ C)"] },
-
-        // レベル2: 含意と仮定 (6-12)
         { lv:2, p:["A → B","A"], c:"B", d:["A","B","A → B"] },
         { lv:2, p:[], c:"A → A", d:["A","A → A","[A]¹"] },
         { lv:2, p:["A"], c:"B → A", d:["A","B","B → A","[B]¹"] },
@@ -130,15 +132,11 @@
         { lv:2, p:["A → B","B → C"], c:"A → C", d:["A","B","C","A → B","B → C","A → C","[A]¹"] },
         { lv:2, p:["A → (B → C)"], c:"(A ∧ B) → C", d:["A","B","C","A ∧ B","B → C","A → (B → C)","(A ∧ B) → C","[A ∧ B]¹"] },
         { lv:2, p:["(A ∧ B) → C"], c:"A → (B → C)", d:["A","B","C","A ∧ B","B → C","(A ∧ B) → C","A → (B → C)","[A]¹","[B]²"] },
-
-        // レベル3: 選言 (13-17)
         { lv:3, p:["A"], c:"A ∨ B", d:["A","A ∨ B"] },
         { lv:3, p:["B"], c:"A ∨ B", d:["B","A ∨ B"] },
         { lv:3, p:["A ∨ B"], c:"B ∨ A", d:["A","B","A ∨ B","B ∨ A","[A]¹","[B]²"] },
         { lv:3, p:["A ∨ A"], c:"A", d:["A","A ∨ A","[A]¹","[A]²"] },
         { lv:3, p:["(A ∨ B) ∨ C"], c:"A ∨ (B ∨ C)", d:["A","B","C","A ∨ B","B ∨ C","(A ∨ B) ∨ C","A ∨ (B ∨ C)","[A ∨ B]¹","[C]²","[A]³","[B]⁴"] },
-
-        // レベル4: 否定と矛盾 (18-25)
         { lv:4, p:["A","¬A"], c:"⊥", d:["A","¬A","⊥"] },
         { lv:4, p:["A"], c:"¬¬A", d:["A","¬A","¬¬A","⊥","[¬A]¹"] },
         { lv:4, p:["A → ⊥"], c:"¬A", d:["A","⊥","A → ⊥","¬A","[A]¹"] },
@@ -147,8 +145,6 @@
         { lv:4, p:["A → B"], c:"¬B → ¬A", d:["A","B","⊥","A → B","¬B","¬A","¬B → ¬A","[A]¹","[¬B]²"] },
         { lv:4, p:["A → ¬B"], c:"B → ¬A", d:["A","B","⊥","¬A","¬B","A → ¬B","B → ¬A","[B]¹","[A]²"] },
         { lv:4, p:[], c:"¬(A ∧ ¬A)", d:["A","¬A","A ∧ ¬A","⊥","¬(A ∧ ¬A)","[A ∧ ¬A]¹"] },
-
-        // レベル5: 複合問題 (26-35)
         { lv:5, p:["A ∧ B"], c:"A ∨ B", d:["A","B","A ∧ B","A ∨ B"] },
         { lv:5, p:["A → B","A → C"], c:"A → (B ∧ C)", d:["A","B","C","B ∧ C","A → B","A → C","A → (B ∧ C)","[A]¹"] },
         { lv:5, p:["A → (B ∧ C)"], c:"(A → B) ∧ (A → C)", d:["A","B","C","B ∧ C","A → B","A → C","A → (B ∧ C)","(A → B) ∧ (A → C)","[A]¹","[A]²"] },
@@ -159,8 +155,6 @@
         { lv:5, p:["(A ∧ B) ∨ (A ∧ C)"], c:"A ∧ (B ∨ C)", d:["A","B","C","A ∧ B","A ∧ C","B ∨ C","(A ∧ B) ∨ (A ∧ C)","A ∧ (B ∨ C)","[A ∧ B]¹","[A ∧ C]²"] },
         { lv:5, p:["A ∨ (B ∧ C)"], c:"(A ∨ B) ∧ (A ∨ C)", d:["A","B","C","B ∧ C","A ∨ B","A ∨ C","A ∨ (B ∧ C)","(A ∨ B) ∧ (A ∨ C)","[A]¹","[A]²","[B ∧ C]³","[B ∧ C]⁴"] },
         { lv:5, p:["(A ∨ B) ∧ (A ∨ C)"], c:"A ∨ (B ∧ C)", d:["A","B","C","A ∨ B","A ∨ C","B ∧ C","A ∨ (B ∧ C)","(A ∨ B) ∧ (A ∨ C)","[A]¹","[B]²","[A]³","[C]⁴"] },
-
-        // レベル6: ド・モルガンと二重否定 (36-46)
         { lv:6, p:["¬(A ∨ B)"], c:"¬A ∧ ¬B", d:["A","B","A ∨ B","¬A","¬B","⊥","¬(A ∨ B)","¬A ∧ ¬B","[A]¹","[B]²"] },
         { lv:6, p:["¬A ∧ ¬B"], c:"¬(A ∨ B)", d:["A","B","A ∨ B","¬A","¬B","⊥","¬A ∧ ¬B","¬(A ∨ B)","[A ∨ B]¹","[A]²","[B]³"] },
         { lv:6, p:["¬A ∨ ¬B"], c:"¬(A ∧ B)", d:["A","B","A ∧ B","¬A","¬B","⊥","¬A ∨ ¬B","¬(A ∧ B)","[A ∧ B]¹","[A ∧ B]²","[¬A]³","[¬B]⁴"] },
@@ -172,20 +166,16 @@
         { lv:6, p:["¬(A → B)"], c:"¬B", d:["A","B","A → B","¬B","¬(A → B)","⊥","[B]¹","[A]²"] },
         { lv:6, p:["¬¬(A ∧ B)"], c:"¬¬A ∧ ¬¬B", d:["A","B","A ∧ B","¬A","¬B","¬¬A","¬¬B","¬(A ∧ B)","⊥","¬¬(A ∧ B)","¬¬A ∧ ¬¬B","[¬A]¹","[¬B]²","[A ∧ B]³","[A ∧ B]⁴"] },
         { lv:6, p:["¬¬A ∧ ¬¬B"], c:"¬¬(A ∧ B)", d:["A","B","A ∧ B","¬A","¬B","¬¬A","¬¬B","¬(A ∧ B)","⊥","¬¬A ∧ ¬¬B","¬¬(A ∧ B)","[¬(A ∧ B)]¹","[A]²","[B]³"] },
-
-        // レベル7: 難問 (47-50)
         { lv:7, p:["A → (B → C)"], c:"B → (A → C)", d:["A","B","C","A → C","B → C","A → (B → C)","B → (A → C)","[A]¹","[B]²"] },
         { lv:7, p:[], c:"A → (¬A → ¬B)", d:["A","B","¬A","¬B","⊥","¬A → ¬B","A → (¬A → ¬B)","[A]¹","[¬A]²","[B]³"] },
         { lv:7, p:["¬(A ∧ B)","A"], c:"¬B", d:["A","B","A ∧ B","¬B","¬(A ∧ B)","⊥","[B]¹"] },
         { lv:7, p:["A ∨ ¬¬A"], c:"¬¬A ∨ A", d:["A","¬A","¬¬A","A ∨ ¬¬A","¬¬A ∨ A","[A]¹","[¬¬A]²"] }
     ];
 
-    // --- 1. カッコ対応 ASTパーサーと判定エンジン ---
     function parseAST(str) {
         if (!str || str === '[ ? ]') return null;
         str = str.replace(/\[|\]|¹|²|³|⁴/g, '').trim();
 
-        // 外側の不要なカッコを剥がす
         while (str.startsWith('(') && str.endsWith(')')) {
             let openCount = 0, canStrip = true;
             for (let i = 0; i < str.length - 1; i++) {
@@ -199,7 +189,6 @@
 
         if (str.startsWith('¬')) return { op: '¬', child: parseAST(str.substring(1)) };
 
-        // カッコを考慮してメインの演算子を探す
         const ops = ['→', '∨', '∧'];
         for (let op of ops) {
             let depth = 0;
@@ -225,7 +214,7 @@
     function validateRule(ruleLabel, sources, target) {
         let tgtAst = parseAST(target);
         let srcAsts = sources.map(parseAST);
-        if(srcAsts.includes(null) || !tgtAst) return true; // 空枠があれば弾かない
+        if(srcAsts.includes(null) || !tgtAst) return true;
 
         switch (ruleLabel) {
             case '∧I':
@@ -267,45 +256,49 @@
         }
     }
 
-    // --- 2. 出題とUI制御 ---
     let activeNode = null;
     let currentProblemIndex = -1;
-
     const levelColors = ['#2ecc71', '#3498db', '#9b59b6', '#e67e22', '#e74c3c', '#c0392b', '#8e44ad'];
 
-    window.onload = () => { loadRandomProblem(); };
+    window.onload = () => { 
+        // JS側で安全にクリックイベントを紐付け
+        document.getElementById('skip-btn').addEventListener('click', loadRandomProblem);
+        loadRandomProblem(); 
+    };
 
     function loadRandomProblem() {
-        let nextIndex = currentProblemIndex;
-        while (nextIndex === currentProblemIndex) {
-            nextIndex = Math.floor(Math.random() * problemDatabase.length);
-        }
-        currentProblemIndex = nextIndex;
-        const problem = problemDatabase[currentProblemIndex];
-
-        // UI更新
-        const pText = problem.p.length > 0 ? problem.p.join(', ') + ' ⊢ ' : '⊢ ';
-        document.getElementById('problem-text').innerText = pText + problem.c;
-        const badge = document.getElementById('level-badge');
-        badge.innerText = 'Lv.' + problem.lv;
-        badge.style.background = levelColors[problem.lv - 1] || '#34495e';
-
-        // キャンバスリセット
         const canvas = document.getElementById('canvas');
-        canvas.innerHTML = `
-            <div class="tree-container" id="root-container">
-                <div class="node filled" onclick="openRuleModal(this)">${problem.c}</div>
-            </div>`;
+        canvas.style.opacity = 0; // フェードアウト演出
 
-        // パレット生成
-        const paletteGrid = document.getElementById('palette-grid');
-        paletteGrid.innerHTML = '';
-        problem.d.forEach(formula => {
-            const isAssumption = formula.includes('[');
-            paletteGrid.innerHTML += `<div class="palette-card ${isAssumption ? 'assumption' : ''}" onclick="fillPlaceholder('${formula}')">${formula}</div>`;
-        });
+        setTimeout(() => {
+            let nextIndex = currentProblemIndex;
+            while (nextIndex === currentProblemIndex) {
+                nextIndex = Math.floor(Math.random() * problemDatabase.length);
+            }
+            currentProblemIndex = nextIndex;
+            const problem = problemDatabase[currentProblemIndex];
 
-        closeAllModals();
+            const pText = problem.p.length > 0 ? problem.p.join(', ') + ' ⊢ ' : '⊢ ';
+            document.getElementById('problem-text').innerText = pText + problem.c;
+            const badge = document.getElementById('level-badge');
+            badge.innerText = 'Lv.' + problem.lv;
+            badge.style.background = levelColors[problem.lv - 1] || '#34495e';
+
+            canvas.innerHTML = `
+                <div class="tree-container" id="root-container">
+                    <div class="node filled" onclick="openRuleModal(this)">${problem.c}</div>
+                </div>`;
+
+            const paletteGrid = document.getElementById('palette-grid');
+            paletteGrid.innerHTML = '';
+            problem.d.forEach(formula => {
+                const isAssumption = formula.includes('[');
+                paletteGrid.innerHTML += `<div class="palette-card ${isAssumption ? 'assumption' : ''}" onclick="fillPlaceholder('${formula}')">${formula}</div>`;
+            });
+
+            closeAllModals();
+            canvas.style.opacity = 1; // フェードイン演出
+        }, 150); // アニメーションの待機時間
     }
 
     function closeAllModals() {
@@ -335,7 +328,6 @@
         document.getElementById('overlay').style.display = 'block';
     }
 
-    // --- 3. 木構造の操作 ---
     function fillPlaceholder(formula) {
         if (!activeNode) return;
         activeNode.className = 'node filled';
@@ -365,9 +357,4 @@
 
         let premisesHTML = '';
         for(let i=0; i<premiseCount; i++) {
-            premisesHTML += `<div class="node placeholder" onclick="openPaletteModal(this)">[ ? ]</div>`;
-        }
-
-        newTree.innerHTML = `
-            <div class="premises">${premisesHTML}</div>
-            <div class="inference-line"><span class="rule-label">${r
+            premisesHTML += `<div c
