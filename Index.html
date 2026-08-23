@@ -3,65 +3,90 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>自然演繹 MVPテスト (∧, →)</title>
+<title>自然演繹パズル (穴埋め方式)</title>
 <style>
     body { font-family: sans-serif; background: #f4f7f6; margin: 0; display: flex; flex-direction: column; height: 100dvh; touch-action: none; overflow: hidden; }
     header { background: #2c3e50; color: white; padding: 10px; text-align: center; font-size: 14px; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
     #canvas { flex: 1; position: relative; overflow: hidden; }
-    #svg-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
     
-    .node { position: absolute; padding: 10px 15px; background: #ecf0f1; border-radius: 5px; font-weight: bold; text-align: center; user-select: none; border: 2px solid transparent; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: box-shadow 0.2s, transform 0.2s; }
-    .node.active { box-shadow: 0 10px 20px rgba(0,0,0,0.3); transform: scale(1.05); z-index: 100; }
-    .node.error { border: 2px dashed #e74c3c; background-color: #fadbd8; }
+    /* 木構造のCSSレイアウト */
+    .tree-container { position: absolute; }
+    .tree { display: inline-flex; flex-direction: column; align-items: center; }
+    .premises { display: flex; flex-direction: row; align-items: flex-end; gap: 15px; margin-bottom: 2px; }
+    .conclusion { margin-top: 2px; }
     
-    line { stroke: #333; stroke-width: 2; }
+    /* 推論線 */
+    .inference-line { width: 100%; border-top: 2px solid #333; text-align: right; position: relative; }
+    .rule-label { position: absolute; right: -25px; top: -10px; font-size: 12px; font-weight: bold; color: #2980b9; }
     
-    /* モーダル・パレット共通スタイル */
-    .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 200; text-align: center; min-width: 250px; }
-    .btn { margin: 5px; padding: 10px; cursor: pointer; border: none; background: #2ecc71; color: white; border-radius: 5px; font-weight: bold; width: 80%; }
+    /* 論理式ノード */
+    .node { padding: 10px 15px; border-radius: 5px; font-weight: bold; text-align: center; user-select: none; border: 2px solid transparent; font-size: 16px; }
+    .node.filled { background: #ecf0f1; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1); transition: background 0.2s; }
+    .node.filled:hover { background: #d5dbdb; }
+    .node.placeholder { background: white; border: 2px dashed #95a5a6; color: #95a5a6; min-width: 40px; }
+    
+    /* ドラッグ中の浮遊ノード */
+    .node.draggable { position: absolute; z-index: 100; cursor: grab; background: #3498db; color: white; }
+    .node.draggable.dragging { opacity: 0.8; cursor: grabbing; }
+    
+    /* エラー表示（赤い点線） */
+    .tree.error > .inference-line { border-top: 2px dashed #e74c3c; }
+    .tree.error { background-color: rgba(231, 76, 60, 0.1); border-radius: 10px; padding: 5px; }
+
+    /* モーダルUI */
+    .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 200; width: 80%; max-width: 300px; }
+    .modal h3 { margin-top: 0; font-size: 16px; text-align: center; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+    .group-label { font-size: 12px; color: #7f8c8d; margin-top: 10px; font-weight: bold; }
+    .btn { width: 100%; margin: 5px 0; padding: 10px; cursor: pointer; border: none; background: #2ecc71; color: white; border-radius: 5px; font-weight: bold; }
+    .btn.forward { background: #e67e22; }
     .btn.cancel { background: #95a5a6; margin-top: 15px; }
     
     #palette-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-    .palette-card { padding: 15px 10px; background: #3498db; color: white; border-radius: 5px; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; }
-    
-    #overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.3); z-index: 150; }
+    .palette-card { padding: 15px 10px; background: #3498db; color: white; border-radius: 5px; cursor: pointer; font-weight: bold; text-align: center; }
+    #overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.4); z-index: 150; }
 </style>
 </head>
 <body>
 
 <header>
     お題: <b>A → B, A ⊢ A ∧ B</b><br>
-    <small>空間をダブルタップで追加 / 長押しで移動 / フリックで合流</small>
+    <small>空間ダブルタップで式を出す / 式をタップして枠を作る</small>
 </header>
 
-<div id="canvas">
-    <svg id="svg-layer"></svg>
-</div>
+<div id="canvas"></div>
 
 <div id="overlay" onclick="closeAllModals()"></div>
 
 <!-- 推論規則選択モーダル -->
 <div id="rule-modal" class="modal">
     <h3>推論規則を選択</h3>
-    <button class="btn" onclick="applyRule('impl_E')">→E (含意除去)</button>
-    <button class="btn" onclick="applyRule('and_I')">∧I (連言導入)</button>
+    
+    <div class="group-label">▲ 上へ伸ばす (逆算)</div>
+    <button class="btn" onclick="applyRule('and_I_up')">∧I (連言導入)</button>
+    <button class="btn" onclick="applyRule('impl_E_up')">→E (含意除去)</button>
+
+    <div class="group-label">▼ 下へ下ろす (前進)</div>
+    <button class="btn forward" onclick="applyRule('and_I_down')">∧I (連言導入)</button>
+    <button class="btn forward" onclick="applyRule('impl_E_down')">→E (含意除去)</button>
+    
     <button class="btn cancel" onclick="closeAllModals()">キャンセル</button>
 </div>
 
 <!-- ダブルタップ用 論理式パレット -->
 <div id="palette-modal" class="modal">
-    <h3 style="margin: 0;">手持ちの論理式</h3>
+    <h3>手持ちの論理式</h3>
     <div id="palette-grid">
-        <div class="palette-card" onclick="spawnFromPalette('A')">A</div>
-        <div class="palette-card" onclick="spawnFromPalette('B')">B</div>
-        <div class="palette-card" onclick="spawnFromPalette('A → B')">A → B</div>
-        <div class="palette-card" onclick="spawnFromPalette('A ∧ B')">A ∧ B</div>
+        <div class="palette-card" onclick="spawnFloatingNode('A')">A</div>
+        <div class="palette-card" onclick="spawnFloatingNode('B')">B</div>
+        <div class="palette-card" onclick="spawnFloatingNode('A → B')">A → B</div>
+        <div class="palette-card" onclick="spawnFloatingNode('A ∧ B')">A ∧ B</div>
     </div>
 </div>
 
 <script>
-    // --- 1. AST（抽象構文木）ロジックエンジン ---
+    // --- 1. AST（抽象構文木）と論理判定エンジン ---
     function parseAST(str) {
+        if (!str || str === '[ ? ]') return null;
         if (str.includes('∧')) {
             let [l, r] = str.split('∧').map(s => s.trim());
             return { op: '∧', left: parseAST(l), right: parseAST(r) };
@@ -77,65 +102,49 @@
         return JSON.stringify(ast1) === JSON.stringify(ast2);
     }
 
-    function validateRule(rule, sources, target) {
+    function validateRule(ruleLabel, sources, target) {
         let tgtAst = parseAST(target);
         let srcAsts = sources.map(parseAST);
+        if(srcAsts.includes(null) || !tgtAst) return true; // 空枠がある場合はエラーを出さない
 
-        if (rule === 'impl_E') {
-            if (srcAsts.length !== 2) return false;
-            let impl = srcAsts.find(s => s.op === '→');
+        if (ruleLabel === '→E') {
+            let impl = srcAsts.find(s => s && s.op === '→');
             let atom = srcAsts.find(s => s !== impl);
             if (!impl || !atom) return false;
             return checkEqual(impl.left, atom) && checkEqual(impl.right, tgtAst);
         }
-        if (rule === 'and_I') {
-            if (srcAsts.length !== 2) return false;
-            if (tgtAst.op !== '∧') return false;
+        if (ruleLabel === '∧I') {
+            if (tgtAst.op !== '∧' || srcAsts.length !== 2) return false;
             return (checkEqual(srcAsts[0], tgtAst.left) && checkEqual(srcAsts[1], tgtAst.right)) ||
                    (checkEqual(srcAsts[1], tgtAst.left) && checkEqual(srcAsts[0], tgtAst.right));
         }
         return false;
     }
 
-
-    // --- 2. UI・描画エンジン ---
+    // --- 2. UI操作エンジン ---
     const canvas = document.getElementById('canvas');
-    const svgLayer = document.getElementById('svg-layer');
-    let nodes = [];
-    let edges = [];
-    let nodeIdCounter = 0;
-
-    let activeNode = null;
-    let isDrawing = false;
-    let isMoving = false;
-    let pressTimer = null;
-    let tempLine = null;
-    let startCoords = {x:0, y:0};
-    
-    let pendingConnection = null;
-    
-    // ダブルタップ検知用
+    let activeTargetNode = null;
     let lastTapTime = 0;
     let tapPosition = { x: 0, y: 0 };
+    let dragElement = null;
+    let dragOffset = { x: 0, y: 0 };
 
-    // --- 初期化処理 ---
+    // 初期配置
     window.onload = () => {
-        // 画面下部に初期状態の「結論」を配置する
-        const startX = window.innerWidth / 2 - 35;
-        const startY = window.innerHeight - 150; 
-        spawn('A ∧ B', startX, startY);
+        const root = document.createElement('div');
+        root.className = 'tree-container draggable-root';
+        root.style.left = (window.innerWidth / 2 - 40) + 'px';
+        root.style.top = (window.innerHeight - 150) + 'px';
+        root.innerHTML = `<div class="node filled" onclick="openRuleModal(this)">A ∧ B</div>`;
+        canvas.appendChild(root);
+        bindRootDrag(root);
     };
 
-    // --- ダブルタップでパレットを開く ---
-    canvas.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('.node')) return; // ノード上のタップは無視
-
-        const currentTime = new Date().getTime();
-        const tapLength = currentTime - lastTapTime;
-        
-        if (tapLength < 300 && tapLength > 0) {
-            // スマホのズーム等を防ぎつつダブルタップを検知
-            e.preventDefault();
+    // ダブルタップ検知
+    canvas.addEventListener('click', (e) => {
+        if (e.target !== canvas) return;
+        let currentTime = new Date().getTime();
+        if (currentTime - lastTapTime < 300) {
             tapPosition = { x: e.clientX, y: e.clientY };
             document.getElementById('palette-modal').style.display = 'block';
             document.getElementById('overlay').style.display = 'block';
@@ -143,164 +152,150 @@
         lastTapTime = currentTime;
     });
 
-    function spawnFromPalette(formula) {
-        // タップした座標の少し上に生成する
-        spawn(formula, tapPosition.x - 30, tapPosition.y - 20);
+    function openRuleModal(nodeEl) {
+        activeTargetNode = nodeEl;
+        document.getElementById('rule-modal').style.display = 'block';
+        document.getElementById('overlay').style.display = 'block';
+    }
+
+    function closeAllModals() {
+        document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+        document.getElementById('overlay').style.display = 'none';
+    }
+
+    // --- 3. プレースホルダー付き木構造の生成 ---
+    function applyRule(ruleType) {
         closeAllModals();
+        if (!activeTargetNode) return;
+
+        const formula = activeTargetNode.innerText;
+        const newTree = document.createElement('div');
+        newTree.className = 'tree';
+
+        // 選択された規則に応じたテンプレート
+        if (ruleType === 'and_I_up') {
+            newTree.innerHTML = `
+                <div class="premises">
+                    <div class="node placeholder">[ ? ]</div>
+                    <div class="node placeholder">[ ? ]</div>
+                </div>
+                <div class="inference-line"><span class="rule-label">∧I</span></div>
+                <div class="conclusion"><div class="node filled" onclick="openRuleModal(this)">${formula}</div></div>`;
+        } else if (ruleType === 'impl_E_up') {
+            newTree.innerHTML = `
+                <div class="premises">
+                    <div class="node placeholder">[ ? ]</div>
+                    <div class="node placeholder">[ ? ]</div>
+                </div>
+                <div class="inference-line"><span class="rule-label">→E</span></div>
+                <div class="conclusion"><div class="node filled" onclick="openRuleModal(this)">${formula}</div></div>`;
+        } else if (ruleType === 'and_I_down') {
+            newTree.innerHTML = `
+                <div class="premises">
+                    <div class="node filled" onclick="openRuleModal(this)">${formula}</div>
+                    <div class="node placeholder">[ ? ]</div>
+                </div>
+                <div class="inference-line"><span class="rule-label">∧I</span></div>
+                <div class="conclusion"><div class="node placeholder">[ ? ]</div></div>`;
+        } else if (ruleType === 'impl_E_down') {
+            newTree.innerHTML = `
+                <div class="premises">
+                    <div class="node filled" onclick="openRuleModal(this)">${formula}</div>
+                    <div class="node placeholder">[ ? ]</div>
+                </div>
+                <div class="inference-line"><span class="rule-label">→E</span></div>
+                <div class="conclusion"><div class="node placeholder">[ ? ]</div></div>`;
+        }
+
+        activeTargetNode.replaceWith(newTree);
+        activeTargetNode = null;
+        validateAllTrees();
     }
 
-    function spawn(formula, x, y) {
-        const id = 'node_' + (nodeIdCounter++);
+    // --- 4. ドラッグ＆ドロップと穴埋め処理 ---
+    function spawnFloatingNode(formula) {
+        closeAllModals();
         const el = document.createElement('div');
-        el.className = 'node';
+        el.className = 'node draggable filled';
         el.innerText = formula;
-        
-        // 座標指定がない場合は中央付近にランダム
-        if (x === undefined) x = window.innerWidth / 2 - 30 + (Math.random()*40 - 20);
-        if (y === undefined) y = window.innerHeight / 2 - 80 + (Math.random()*40 - 20);
-        
-        el.style.left = x + 'px';
-        el.style.top = y + 'px';
-        
+        el.style.left = tapPosition.x - 30 + 'px';
+        el.style.top = tapPosition.y - 20 + 'px';
         canvas.appendChild(el);
-        const nodeObj = { id, el, formula, x, y };
-        nodes.push(nodeObj);
-        
-        bindPointerEvents(nodeObj);
+        bindFloatingDrag(el);
     }
 
-    function getCenter(el) {
-        const rect = el.getBoundingClientRect();
-        return { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
+    function bindFloatingDrag(el) {
+        el.addEventListener('pointerdown', (e) => {
+            dragElement = el;
+            dragElement.classList.add('dragging');
+            const rect = dragElement.getBoundingClientRect();
+            dragOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        });
     }
 
-    function bindPointerEvents(node) {
-        node.el.addEventListener('pointerdown', (e) => {
-            e.stopPropagation(); // キャンバスのダブルタップ誤爆を防ぐ
-            activeNode = node;
-            startCoords = { x: e.clientX, y: e.clientY };
-            
-            // 300ms経過したら「移動モード」になる
-            pressTimer = setTimeout(() => {
-                isMoving = true;
-                node.el.classList.add('active');
-            }, 300);
+    // 全体を移動するためのドラッグ処理
+    function bindRootDrag(root) {
+        root.addEventListener('pointerdown', (e) => {
+            if (e.target.classList.contains('node')) return; // ノード自体を触った場合は移動させない
+            dragElement = root;
+            const rect = dragElement.getBoundingClientRect();
+            dragOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top };
         });
     }
 
     document.addEventListener('pointermove', (e) => {
-        if (!activeNode) return;
-
-        // 指が大きく動いたら線引きモード
-        const dist = Math.hypot(e.clientX - startCoords.x, e.clientY - startCoords.y);
-        if (!isMoving && dist > 15) {
-            clearTimeout(pressTimer);
-            isDrawing = true;
-        }
-
-        if (isMoving) {
-            const dx = e.clientX - startCoords.x;
-            const dy = e.clientY - startCoords.y;
-            activeNode.x += dx;
-            activeNode.y += dy;
-            activeNode.el.style.left = activeNode.x + 'px';
-            activeNode.el.style.top = activeNode.y + 'px';
-            startCoords = { x: e.clientX, y: e.clientY };
-            updateEdges();
-        } else if (isDrawing) {
-            if (!tempLine) {
-                tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                svgLayer.appendChild(tempLine);
-            }
-            const center = getCenter(activeNode.el);
-            tempLine.setAttribute('x1', center.x);
-            tempLine.setAttribute('y1', center.y);
-            tempLine.setAttribute('x2', e.clientX);
-            tempLine.setAttribute('y2', e.clientY);
-        }
+        if (!dragElement) return;
+        dragElement.style.left = (e.clientX - dragOffset.x) + 'px';
+        dragElement.style.top = (e.clientY - dragOffset.y) + 'px';
     });
 
     document.addEventListener('pointerup', (e) => {
-        clearTimeout(pressTimer);
+        if (!dragElement) return;
         
-        if (isMoving) {
-            activeNode.el.classList.remove('active');
-        } else if (isDrawing) {
-            // 合流判定
-            const dropTarget = getElementUnderPointer(e.clientX, e.clientY);
-            if (dropTarget && dropTarget !== activeNode.el) {
-                const targetNode = nodes.find(n => n.el === dropTarget);
-                pendingConnection = { source: activeNode, target: targetNode };
-                document.getElementById('rule-modal').style.display = 'block';
-                document.getElementById('overlay').style.display = 'block';
+        // もし浮遊している論理式をドラッグしていたら、プレースホルダーへのドロップを判定
+        if (dragElement.classList.contains('draggable')) {
+            dragElement.style.pointerEvents = 'none'; // 下の要素を取得するために一時的に貫通させる
+            const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
+            dragElement.style.pointerEvents = 'auto';
+
+            if (dropTarget && dropTarget.classList.contains('placeholder')) {
+                // 穴埋め成功！
+                dropTarget.className = 'node filled';
+                dropTarget.innerText = dragElement.innerText;
+                dropTarget.onclick = function() { openRuleModal(this); };
+                dragElement.remove(); // 浮遊ノードを削除
+                validateAllTrees(); // バリデーション実行
             }
+            dragElement.classList.remove('dragging');
         }
-        
-        if (tempLine) {
-            tempLine.remove();
-            tempLine = null;
-        }
-        
-        activeNode = null;
-        isDrawing = false;
-        isMoving = false;
+        dragElement = null;
     });
 
-    function getElementUnderPointer(x, y) {
-        const els = document.elementsFromPoint(x, y);
-        return els.find(el => el.classList.contains('node'));
-    }
-
-    function applyRule(ruleName) {
-        closeAllModals();
-        if(!pendingConnection) return;
-        
-        const { source, target } = pendingConnection;
-        
-        let edge = edges.find(e => e.target === target);
-        if (!edge) {
-            edge = { sources: [source], target: target, rule: ruleName, lineEls: [] };
-            edges.push(edge);
-        } else {
-            edge.sources.push(source);
-            edge.rule = ruleName;
-        }
-        
-        const lineEl = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        svgLayer.appendChild(lineEl);
-        edge.lineEls.push(lineEl);
-        
-        const sourceFormulas = edge.sources.map(n => n.formula);
-        const isValid = validateRule(ruleName, sourceFormulas, target.formula);
-        
-        if (!isValid) {
-            target.el.classList.add('error');
-        } else {
-            target.el.classList.remove('error');
-        }
-        
-        pendingConnection = null;
-        updateEdges();
-    }
-
-    function closeAllModals() {
-        document.getElementById('rule-modal').style.display = 'none';
-        document.getElementById('palette-modal').style.display = 'none';
-        document.getElementById('overlay').style.display = 'none';
-        pendingConnection = null;
-    }
-
-    function updateEdges() {
-        edges.forEach(edge => {
-            const tCenter = getCenter(edge.target.el);
-            edge.sources.forEach((src, idx) => {
-                const sCenter = getCenter(src.el);
-                const line = edge.lineEls[idx];
-                line.setAttribute('x1', sCenter.x);
-                line.setAttribute('y1', sCenter.y);
-                line.setAttribute('x2', tCenter.x);
-                line.setAttribute('y2', tCenter.y);
+    // --- 5. バリデーション実行 ---
+    function validateAllTrees() {
+        document.querySelectorAll('.tree').forEach(tree => {
+            const ruleLabelEl = tree.querySelector('.rule-label');
+            if (!ruleLabelEl) return;
+            const ruleLabel = ruleLabelEl.innerText;
+            
+            // 前提の取得（子ツリーの場合はその結論ノードを取得）
+            const premiseNodes = Array.from(tree.querySelector('.premises').children);
+            const sources = premiseNodes.map(child => {
+                if (child.classList.contains('node')) return child.innerText;
+                if (child.classList.contains('tree')) return child.querySelector('.conclusion > .node').innerText;
+                return '[ ? ]';
             });
+            
+            // 結論の取得
+            const conclusionNode = tree.querySelector('.conclusion > .node');
+            const target = conclusionNode ? conclusionNode.innerText : '[ ? ]';
+
+            // 検証とエラー表示
+            if (validateRule(ruleLabel, sources, target)) {
+                tree.classList.remove('error');
+            } else {
+                tree.classList.add('error');
+            }
         });
     }
 </script>
