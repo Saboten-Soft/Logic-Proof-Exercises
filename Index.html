@@ -366,4 +366,48 @@
         
         const formula = activeNode.innerText;
         const isAssumption = activeNode.classList.contains('assumption');
-        c
+        const newNode = document.createElement('div');
+        newNode.className = `node filled ${isAssumption ? 'assumption' : ''}`;
+        newNode.innerText = formula;
+        newNode.onclick = function(e) { e.stopPropagation(); openRuleModal(this); };
+        
+        tree.replaceWith(newNode);
+        closeAllModals();
+        validateAllTrees();
+    }
+
+    function validateAllTrees() {
+        document.querySelectorAll('.tree').forEach(tree => {
+            const inferenceLine = tree.querySelector(':scope > .inference-line');
+            if (!inferenceLine) return;
+            
+            const ruleLabelEl = inferenceLine.querySelector('.rule-label');
+            const ruleLabel = ruleLabelEl ? ruleLabelEl.innerText.trim() : '';
+            
+            const premisesContainer = tree.querySelector(':scope > .premises');
+            const premiseNodes = Array.from(premisesContainer.children);
+            
+            const sources = premiseNodes.map(child => {
+                if (child.classList.contains('node')) return child.innerText;
+                if (child.classList.contains('tree')) {
+                    const concNode = child.querySelector(':scope > .conclusion > .node');
+                    return concNode ? concNode.innerText : '[ ? ]';
+                }
+                return '[ ? ]';
+            });
+            
+            const conclusionContainer = tree.querySelector(':scope > .conclusion');
+            const conclusionNode = conclusionContainer.querySelector('.node');
+            const target = conclusionNode ? conclusionNode.innerText : '[ ? ]';
+
+            if (validateRule(ruleLabel, sources, target)) {
+                tree.classList.remove('error');
+            } else {
+                tree.classList.add('error');
+            }
+        });
+    }
+</script>
+
+</body>
+</html>
