@@ -3,91 +3,93 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>自然演繹パズル (穴埋め方式 v2)</title>
+<title>自然演繹パズル (ボトムアップ方式)</title>
 <style>
-    body { font-family: sans-serif; background: #f4f7f6; margin: 0; display: flex; flex-direction: column; height: 100dvh; touch-action: none; overflow: hidden; }
-    header { background: #2c3e50; color: white; padding: 10px; text-align: center; font-size: 14px; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-    #canvas { flex: 1; position: relative; overflow: auto; }
+    body { font-family: sans-serif; background: #f4f7f6; margin: 0; display: flex; flex-direction: column; height: 100dvh; touch-action: none; }
+    header { background: #2c3e50; color: white; padding: 12px; text-align: center; font-size: 14px; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+    
+    /* キャンバスを下揃えにして、木が上へ育つようにする */
+    #canvas { flex: 1; display: flex; justify-content: center; align-items: flex-end; padding-bottom: 60px; overflow: auto; }
     
     /* 木構造のCSSレイアウト */
-    .tree-container { position: absolute; }
-    .tree { display: inline-flex; flex-direction: column; align-items: center; }
+    .tree { display: inline-flex; flex-direction: column; align-items: center; margin: 0 5px; }
     .premises { display: flex; flex-direction: row; align-items: flex-end; gap: 15px; margin-bottom: 2px; }
     .conclusion { margin-top: 2px; }
     
     /* 推論線 */
     .inference-line { width: 100%; border-top: 2px solid #333; text-align: right; position: relative; }
-    .rule-label { position: absolute; right: -25px; top: -10px; font-size: 12px; font-weight: bold; color: #2980b9; }
+    .rule-label { position: absolute; right: -25px; top: -10px; font-size: 13px; font-weight: bold; color: #2980b9; }
     
     /* 論理式ノード */
-    .node { padding: 10px 15px; border-radius: 5px; font-weight: bold; text-align: center; user-select: none; border: 2px solid transparent; font-size: 16px; transition: 0.2s; }
-    .node.filled { background: #ecf0f1; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    .node.filled:hover { background: #d5dbdb; }
-    .node.placeholder { background: white; border: 2px dashed #95a5a6; color: #95a5a6; min-width: 40px; }
+    .node { padding: 12px 20px; border-radius: 6px; font-weight: bold; text-align: center; user-select: none; font-size: 16px; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .node.filled { background: #ecf0f1; border: 2px solid #bdc3c7; cursor: pointer; color: #2c3e50; }
+    .node.filled:hover { background: #d5dbdb; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+    .node.placeholder { background: white; border: 2px dashed #3498db; color: #3498db; cursor: pointer; min-width: 40px; animation: pulse 2s infinite; }
     
-    /* ドラッグ中の浮遊ノード */
-    .node.draggable { position: absolute; z-index: 100; cursor: grab; background: #3498db; color: white; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-    .node.draggable.dragging { opacity: 0.9; cursor: grabbing; transform: scale(1.05); }
-    .node.draggable.eraser { background: #e74c3c; }
-    
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(52, 152, 219, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0); } }
+
     /* エラー表示（赤い点線） */
     .tree.error > .inference-line { border-top: 2px dashed #e74c3c; }
-    .tree.error { background-color: rgba(231, 76, 60, 0.1); border-radius: 10px; padding: 5px; transition: background 0.3s; }
+    .tree.error > .conclusion > .node { border-color: #e74c3c; background-color: #fadbd8; color: #c0392b; }
 
     /* モーダルUI */
-    .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 200; width: 85%; max-width: 320px; }
-    .modal h3 { margin-top: 0; font-size: 16px; text-align: center; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 10px; }
-    .group-label { font-size: 12px; color: #7f8c8d; margin-top: 15px; font-weight: bold; }
-    .btn { width: 100%; margin: 5px 0; padding: 12px; cursor: pointer; border: none; background: #2ecc71; color: white; border-radius: 5px; font-weight: bold; font-size: 15px; }
-    .btn.forward { background: #e67e22; }
-    .btn.cancel { background: #95a5a6; }
+    .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 25px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); z-index: 200; width: 85%; max-width: 320px; }
+    .modal h3 { margin-top: 0; font-size: 18px; text-align: center; border-bottom: 2px solid #f0f3f4; padding-bottom: 15px; margin-bottom: 15px; color: #2c3e50; }
+    .btn { width: 100%; margin: 6px 0; padding: 14px; cursor: pointer; border: none; background: #2ecc71; color: white; border-radius: 8px; font-weight: bold; font-size: 16px; transition: 0.2s; }
+    .btn:active { transform: scale(0.98); }
+    .btn.cancel { background: #95a5a6; margin-top: 15px; }
     .btn.danger { background: #e74c3c; }
     
-    #palette-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-    .palette-card { padding: 15px 10px; background: #3498db; color: white; border-radius: 5px; cursor: pointer; font-weight: bold; text-align: center; }
-    .palette-card.eraser { background: #e74c3c; grid-column: span 2; }
+    #palette-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .palette-card { padding: 15px 10px; background: #3498db; color: white; border-radius: 8px; cursor: pointer; font-weight: bold; text-align: center; font-size: 16px; }
     
-    #overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.4); z-index: 150; }
+    #overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index: 150; backdrop-filter: blur(2px); }
 </style>
 </head>
 <body>
 
 <header>
     お題: <b>A → B, A ⊢ A ∧ B</b><br>
-    <small>空間ダブルタップで式を出す / 式をドラッグで上書き可能</small>
+    <small>式や枠をタップして、下から上へ証明を組み立ててください</small>
 </header>
 
-<div id="canvas"></div>
+<div id="canvas">
+    <!-- 初期状態の結論 -->
+    <div class="tree-container" id="root-container">
+        <div class="node filled" onclick="openRuleModal(this)">A ∧ B</div>
+    </div>
+</div>
 
 <div id="overlay" onclick="closeAllModals()"></div>
 
-<!-- 推論規則選択モーダル -->
+<!-- 推論規則選択モーダル (埋まっているノード用) -->
 <div id="rule-modal" class="modal">
     <h3>操作を選択</h3>
     
-    <div class="group-label">▲ 上へ伸ばす (逆算)</div>
-    <button class="btn" onclick="applyRule('and_I_up')">∧I (連言導入)</button>
-    <button class="btn" onclick="applyRule('impl_E_up')">→E (含意除去)</button>
-
-    <div class="group-label">▼ 下へ下ろす (前進)</div>
-    <button class="btn forward" onclick="applyRule('and_I_down')">∧I (連言導入)</button>
-    <button class="btn forward" onclick="applyRule('impl_E_down')">→E (含意除去)</button>
+    <div id="grow-actions">
+        <button class="btn" onclick="applyRule('∧I')">∧I (連言導入)</button>
+        <button class="btn" onclick="applyRule('→E')">→E (含意除去)</button>
+        <button class="btn danger" onclick="clearToPlaceholder()" style="margin-top: 15px;">🗑 この枠を空に戻す</button>
+    </div>
     
-    <div class="group-label">■ 修正</div>
-    <button class="btn danger" onclick="clearActiveNode()">🗑 この枠を空に戻す</button>
+    <div id="undo-actions" style="display: none;">
+        <p style="font-size:13px; color:#7f8c8d; text-align:center;">この式にはすでに推論が適用されています。</p>
+        <button class="btn danger" onclick="undoTree()">🗑 上の推論を削除する</button>
+    </div>
+    
     <button class="btn cancel" onclick="closeAllModals()">キャンセル</button>
 </div>
 
-<!-- ダブルタップ用 論理式パレット -->
+<!-- パレットモーダル (空枠用) -->
 <div id="palette-modal" class="modal">
-    <h3>手持ちの論理式</h3>
+    <h3>式を当てはめる</h3>
     <div id="palette-grid">
-        <div class="palette-card" onclick="spawnFloatingNode('A')">A</div>
-        <div class="palette-card" onclick="spawnFloatingNode('B')">B</div>
-        <div class="palette-card" onclick="spawnFloatingNode('A → B')">A → B</div>
-        <div class="palette-card" onclick="spawnFloatingNode('A ∧ B')">A ∧ B</div>
-        <div class="palette-card eraser" onclick="spawnFloatingNode('🗑 消去', true)">🗑 消去（空枠に戻す）</div>
+        <div class="palette-card" onclick="fillPlaceholder('A')">A</div>
+        <div class="palette-card" onclick="fillPlaceholder('B')">B</div>
+        <div class="palette-card" onclick="fillPlaceholder('A → B')">A → B</div>
+        <div class="palette-card" onclick="fillPlaceholder('A ∧ B')">A ∧ B</div>
     </div>
+    <button class="btn cancel" onclick="closeAllModals()">キャンセル</button>
 </div>
 
 <script>
@@ -128,184 +130,131 @@
         return false;
     }
 
-    // --- 2. UI操作エンジン ---
-    const canvas = document.getElementById('canvas');
-    let activeTargetNode = null;
-    let lastTapTime = 0;
-    let tapPosition = { x: 0, y: 0 };
-    let dragElement = null;
-    let dragOffset = { x: 0, y: 0 };
+    // --- 2. UI状態管理 ---
+    let activeNode = null;
 
-    window.onload = () => {
-        const root = document.createElement('div');
-        root.className = 'tree-container draggable-root';
-        root.style.left = (window.innerWidth / 2 - 40) + 'px';
-        root.style.top = (window.innerHeight - 150) + 'px';
-        root.innerHTML = `<div class="node filled" onclick="openRuleModal(this)">A ∧ B</div>`;
-        canvas.appendChild(root);
-        bindRootDrag(root);
-    };
+    function closeAllModals() {
+        document.getElementById('rule-modal').style.display = 'none';
+        document.getElementById('palette-modal').style.display = 'none';
+        document.getElementById('overlay').style.display = 'none';
+        activeNode = null;
+    }
 
-    // ダブルタップ検知
-    canvas.addEventListener('click', (e) => {
-        if (e.target !== canvas) return;
-        let currentTime = new Date().getTime();
-        if (currentTime - lastTapTime < 300) {
-            tapPosition = { x: e.clientX, y: e.clientY };
-            document.getElementById('palette-modal').style.display = 'block';
-            document.getElementById('overlay').style.display = 'block';
+    // 空枠 [ ? ] をタップした時
+    function openPaletteModal(el) {
+        activeNode = el;
+        document.getElementById('palette-modal').style.display = 'block';
+        document.getElementById('overlay').style.display = 'block';
+    }
+
+    // 埋まっている式をタップした時
+    function openRuleModal(el) {
+        activeNode = el;
+        
+        // そのノードが「すでに推論の結論として使われている（上に木がある）」かを判定
+        const isConclusion = el.parentElement.classList.contains('conclusion');
+        
+        if (isConclusion) {
+            document.getElementById('grow-actions').style.display = 'none';
+            document.getElementById('undo-actions').style.display = 'block';
+        } else {
+            document.getElementById('grow-actions').style.display = 'block';
+            document.getElementById('undo-actions').style.display = 'none';
         }
-        lastTapTime = currentTime;
-    });
-
-    function openRuleModal(nodeEl) {
-        activeTargetNode = nodeEl;
+        
         document.getElementById('rule-modal').style.display = 'block';
         document.getElementById('overlay').style.display = 'block';
     }
 
-    function closeAllModals() {
-        document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
-        document.getElementById('overlay').style.display = 'none';
-    }
+    // --- 3. 木構造の操作（ボトムアップ） ---
 
-    // 枠を空に戻す処理
-    function clearActiveNode() {
-        if(!activeTargetNode) return;
-        activeTargetNode.className = 'node placeholder';
-        activeTargetNode.innerText = '[ ? ]';
-        activeTargetNode.onclick = null;
+    // パレットから式を選んで枠を埋める
+    function fillPlaceholder(formula) {
+        if (!activeNode) return;
+        activeNode.className = 'node filled';
+        activeNode.innerText = formula;
+        activeNode.onclick = function(e) { e.stopPropagation(); openRuleModal(this); };
+        closeAllModals();
         validateAllTrees();
-        closeAllModals();
     }
 
-    // --- 3. プレースホルダー付き木構造の生成 ---
-    function applyRule(ruleType) {
+    // 式を空枠に戻す
+    function clearToPlaceholder() {
+        if (!activeNode) return;
+        activeNode.className = 'node placeholder';
+        activeNode.innerText = '[ ? ]';
+        activeNode.onclick = function(e) { e.stopPropagation(); openPaletteModal(this); };
         closeAllModals();
-        if (!activeTargetNode) return;
+        validateAllTrees();
+    }
 
-        const formula = activeTargetNode.innerText;
+    // 結論から上へ木を伸ばす
+    function applyRule(ruleLabel) {
+        if (!activeNode) return;
+        const formula = activeNode.innerText;
         const newTree = document.createElement('div');
         newTree.className = 'tree';
 
-        if (ruleType === 'and_I_up') {
-            newTree.innerHTML = `
-                <div class="premises"><div class="node placeholder">[ ? ]</div><div class="node placeholder">[ ? ]</div></div>
-                <div class="inference-line"><span class="rule-label">∧I</span></div>
-                <div class="conclusion"><div class="node filled" onclick="openRuleModal(this)">${formula}</div></div>`;
-        } else if (ruleType === 'impl_E_up') {
-            newTree.innerHTML = `
-                <div class="premises"><div class="node placeholder">[ ? ]</div><div class="node placeholder">[ ? ]</div></div>
-                <div class="inference-line"><span class="rule-label">→E</span></div>
-                <div class="conclusion"><div class="node filled" onclick="openRuleModal(this)">${formula}</div></div>`;
-        } else if (ruleType === 'and_I_down') {
-            newTree.innerHTML = `
-                <div class="premises"><div class="node filled" onclick="openRuleModal(this)">${formula}</div><div class="node placeholder">[ ? ]</div></div>
-                <div class="inference-line"><span class="rule-label">∧I</span></div>
-                <div class="conclusion"><div class="node placeholder">[ ? ]</div></div>`;
-        } else if (ruleType === 'impl_E_down') {
-            newTree.innerHTML = `
-                <div class="premises"><div class="node filled" onclick="openRuleModal(this)">${formula}</div><div class="node placeholder">[ ? ]</div></div>
-                <div class="inference-line"><span class="rule-label">→E</span></div>
-                <div class="conclusion"><div class="node placeholder">[ ? ]</div></div>`;
+        // 規則に応じたプレースホルダーの生成
+        let premisesHTML = '';
+        if (ruleLabel === '∧I' || ruleLabel === '→E') {
+            premisesHTML = `
+                <div class="node placeholder" onclick="openPaletteModal(this)">[ ? ]</div>
+                <div class="node placeholder" onclick="openPaletteModal(this)">[ ? ]</div>
+            `;
         }
 
-        activeTargetNode.replaceWith(newTree);
-        activeTargetNode = null;
+        newTree.innerHTML = `
+            <div class="premises">${premisesHTML}</div>
+            <div class="inference-line"><span class="rule-label">${ruleLabel}</span></div>
+            <div class="conclusion"><div class="node filled" onclick="openRuleModal(this)">${formula}</div></div>
+        `;
+
+        activeNode.replaceWith(newTree);
+        closeAllModals();
         validateAllTrees();
     }
 
-    // --- 4. ドラッグ＆ドロップと穴埋め・上書き処理 ---
-    function spawnFloatingNode(formula, isEraser = false) {
-        closeAllModals();
-        const el = document.createElement('div');
-        el.className = 'node draggable filled' + (isEraser ? ' eraser' : '');
-        el.innerText = formula;
-        el.style.left = tapPosition.x - 30 + 'px';
-        el.style.top = tapPosition.y - 20 + 'px';
-        canvas.appendChild(el);
-        bindFloatingDrag(el);
-    }
-
-    function bindFloatingDrag(el) {
-        el.addEventListener('pointerdown', (e) => {
-            dragElement = el;
-            dragElement.classList.add('dragging');
-            const rect = dragElement.getBoundingClientRect();
-            dragOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-        });
-    }
-
-    function bindRootDrag(root) {
-        root.addEventListener('pointerdown', (e) => {
-            if (e.target.classList.contains('node')) return; 
-            dragElement = root;
-            const rect = dragElement.getBoundingClientRect();
-            dragOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-        });
-    }
-
-    document.addEventListener('pointermove', (e) => {
-        if (!dragElement) return;
-        dragElement.style.left = (e.clientX - dragOffset.x) + 'px';
-        dragElement.style.top = (e.clientY - dragOffset.y) + 'px';
-    });
-
-    document.addEventListener('pointerup', (e) => {
-        if (!dragElement) return;
+    // 上に伸ばした推論を削除し、単体の式に戻す
+    function undoTree() {
+        if (!activeNode) return;
+        const tree = activeNode.closest('.tree');
+        if (!tree) return;
         
-        if (dragElement.classList.contains('draggable')) {
-            dragElement.style.pointerEvents = 'none'; 
-            const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
-            dragElement.style.pointerEvents = 'auto';
+        const formula = activeNode.innerText;
+        const newNode = document.createElement('div');
+        newNode.className = 'node filled';
+        newNode.innerText = formula;
+        newNode.onclick = function(e) { e.stopPropagation(); openRuleModal(this); };
+        
+        tree.replaceWith(newNode);
+        closeAllModals();
+        validateAllTrees();
+    }
 
-            // 空枠 [ ? ] だけでなく、既に埋まっている枠 (filled) にもドロップ（上書き）可能にした
-            if (dropTarget && (dropTarget.classList.contains('placeholder') || dropTarget.classList.contains('filled'))) {
-                
-                if (dragElement.innerText === '🗑 消去') {
-                    // 消しゴムを落とした場合
-                    dropTarget.className = 'node placeholder';
-                    dropTarget.innerText = '[ ? ]';
-                    dropTarget.onclick = null;
-                } else {
-                    // 通常の式を落とした場合（上書き対応）
-                    dropTarget.className = 'node filled';
-                    dropTarget.innerText = dragElement.innerText;
-                    dropTarget.onclick = function() { openRuleModal(this); };
-                }
-                validateAllTrees();
-            }
-            dragElement.remove(); 
-        }
-        if (dragElement) dragElement.classList.remove('dragging');
-        dragElement = null;
-    });
-
-    // --- 5. バリデーション実行（入れ子バグ修正版） ---
+    // --- 4. バリデーション実行 ---
     function validateAllTrees() {
         document.querySelectorAll('.tree').forEach(tree => {
-            // 入れ子（内側のtree）を誤検知しないよう、Array.fromとchildrenを使って「直下の子要素」だけを確実に取得
-            const inferenceLine = Array.from(tree.children).find(c => c.classList.contains('inference-line'));
+            // scope疑似クラスを使って直下の子要素のみを取得し、入れ子バグを完全に防ぐ
+            const inferenceLine = tree.querySelector(':scope > .inference-line');
             if (!inferenceLine) return;
             
             const ruleLabelEl = inferenceLine.querySelector('.rule-label');
-            if (!ruleLabelEl) return;
-            const ruleLabel = ruleLabelEl.innerText.trim();
+            const ruleLabel = ruleLabelEl ? ruleLabelEl.innerText.trim() : '';
             
-            const premisesContainer = Array.from(tree.children).find(c => c.classList.contains('premises'));
+            const premisesContainer = tree.querySelector(':scope > .premises');
             const premiseNodes = Array.from(premisesContainer.children);
             
             const sources = premiseNodes.map(child => {
                 if (child.classList.contains('node')) return child.innerText;
                 if (child.classList.contains('tree')) {
-                    // 子がtreeの場合、その直下の結論を取得する
-                    const childConclusion = Array.from(child.children).find(c => c.classList.contains('conclusion'));
-                    return childConclusion.querySelector('.node').innerText;
+                    const concNode = child.querySelector(':scope > .conclusion > .node');
+                    return concNode ? concNode.innerText : '[ ? ]';
                 }
                 return '[ ? ]';
             });
             
-            const conclusionContainer = Array.from(tree.children).find(c => c.classList.contains('conclusion'));
+            const conclusionContainer = tree.querySelector(':scope > .conclusion');
             const conclusionNode = conclusionContainer.querySelector('.node');
             const target = conclusionNode ? conclusionNode.innerText : '[ ? ]';
 
